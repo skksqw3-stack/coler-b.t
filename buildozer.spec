@@ -1,31 +1,34 @@
 [app]
+
 title = Cooler Control
 package.name = coolercontrol
 package.domain = org.coolercontrol
 
 source.dir = .
-# ⚠️ مهم: kv اضافه شده تا فایل KV در build لحاظ شود
-source.include_exts = py,png,jpg,kv,atlas,ttf,json
+source.include_exts = py,kv,png,jpg,jpeg,atlas,ttf,json
+source.exclude_dirs = .git,.github,.buildozer,venv,.venv,__pycache__
 
-version = 0.1
+version = 0.1.0
 
-# نسخه‌های پایدار و تست‌شده
-requirements = python3==3.11.5,kivy==2.3.0,kivymd==1.1.1,pyjnius==1.6.1
+requirements = python3,kivy==2.3.0,kivymd==1.1.1,pyjnius
 
 orientation = portrait
 fullscreen = 0
 
-# ⚠️ مجوزها
-android.permissions = android.permission.BLUETOOTH,android.permission.BLUETOOTH_ADMIN,android.permission.BLUETOOTH_CONNECT,android.permission.BLUETOOTH_SCAN,android.permission.ACCESS_FINE_LOCATION,android.permission.ACCESS_COARSE_LOCATION,android.permission.INTERNET
-
 android.api = 33
-android.minapi = 21
+android.minapi = 23
 android.ndk = 25b
-android.ndk_api = 21
+android.ndk_api = 23
+
 android.archs = arm64-v8a
-android.allow_backup = True
 android.accept_sdk_license = True
+android.allow_backup = True
+
+android.permissions = BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_CONNECT,BLUETOOTH_SCAN,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION
+
+p4a.branch = master
 
 [buildozer]
+
 log_level = 2
 warn_on_root = 1
