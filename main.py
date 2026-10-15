@@ -1,17 +1,14 @@
 """
 Cooler Control - کنترل کولر با بلوتوث
+KV در فایل جداگانه cooler.kv است
 """
 
+import os
 from kivy.lang import Builder
-from kivy.uix.boxlayout import BoxLayout
-from kivy.properties import StringProperty, BooleanProperty
+from kivy.core.window import Window
 from kivymd.app import MDApp
-from kivymd.uix.button import MDRaisedButton
-from kivymd.uix.label import MDLabel
-from kivymd.uix.toolbar import MDTopAppBar
-from kivymd.uix.screen import MDScreen
 
-# بلوتوث (در صورت پشتیبانی)
+# بلوتوث
 try:
     from bluetooth_manager import BluetoothManager
     BLUETOOTH_AVAILABLE = True
@@ -20,125 +17,168 @@ except ImportError:
     BluetoothManager = None
 
 
-KV = '''
-MDScreen:
-    MDBoxLayout:
-        orientation: 'vertical'
-        
-        MDTopAppBar:
-            title: "Cooler Control"
-            elevation: 4
-            pos_hint: {"top": 1}
-        
-        MDBoxLayout:
-            orientation: 'vertical'
-            padding: dp(20)
-            spacing: dp(20)
-            
-            MDLabel:
-                text: "وضعیت اتصال"
-                halign: "center"
-                font_style: "H5"
-            
-            MDLabel:
-                id: status_label
-                text: "قطع"
-                halign: "center"
-                theme_text_color: "Custom"
-                text_color: 0.8, 0.2, 0.2, 1
-                font_style: "H4"
-            
-            MDRaisedButton:
-                text: "اسکن دستگاه‌ها"
-                pos_hint: {"center_x": 0.5}
-                size_hint_x: 0.7
-                on_release: app.scan_devices()
-            
-            MDRaisedButton:
-                text: "اتصال"
-                pos_hint: {"center_x": 0.5}
-                size_hint_x: 0.7
-                on_release: app.connect_device()
-            
-            MDLabel:
-                id: device_label
-                text: "دستگاهی متصل نیست"
-                halign: "center"
-                font_style: "Body1"
-'''
-
-Builder.load_string(KV)
-
-
 class CoolerControlApp(MDApp):
-    connected = BooleanProperty(False)
-    device_name = StringProperty("")
+    is_connected = False
+    devices = []
     
     def build(self):
+        """ساخت اپلیکیشن"""
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.theme_style = "Light"
+        self.title = "Cooler Control"
+        Window.clearcolor = (0.95, 0.95, 0.95, 1)
         
+        # راه‌اندازی بلوتوث
         if BLUETOOTH_AVAILABLE:
-            self.bt_manager = BluetoothManager()
+            self.bt = BluetoothManager()
         else:
-            self.bt_manager = None
+            self.bt = None
         
-        return Builder.load_string(KV)
+        # ⚠️ بارگذاری فایل KV جداگانه
+        kv_path = os.path.join(os.path.dirname(__file__), 'cooler.kv')
+        return Builder.load_file(kv_path)
+    
+    # ═══════════════════════════════════════════════
+    # 📡 متدهای بلوتوث
+    # ═══════════════════════════════════════════════
     
     def scan_devices(self):
         """اسکن دستگاه‌های بلوتوث"""
-        self.root.ids.status_label.text = "در حال اسکن..."
-        self.root.ids.status_label.text_color = (0.9, 0.7, 0.1, 1)
-        self.root.ids.device_label.text = "در حال جستجو..."
+        self.update_status("در حال اسکن...", "scanning")
+        self.root.ids.device_info.text = "لطفاً صبر کنید..."
         
-        if self.bt_manager:
+        if self.bt:
             try:
-                devices = self.bt_manager.scan()
+                devices = self.bt.scan()
+                self.devices = devices
+                self.root.ids.device_list.clear_widgets()
+                
                 if devices:
-                    self.root.ids.device_label.text = f"یافت شد: {len(devices)} دستگاه"
+                    self.root.ids.device_info.text = f"یافت شد: {len(devices)} دستگاه"
+                    from kivymd.uix.list import OneLineListItem
+                    for d in devices:
+                        item = OneLineListItem(
+                            text=f"{d['name']}  |  {d['address']}"
+                        )
+                        self.root.ids.device_list.add_widget(item)
                 else:
-                    self.root.ids.device_label.text = "دستگاهی یافت نشد"
+                    self.root.ids.device_info.text = "دستگاهی یافت نشد"
             except Exception as e:
-                self.root.ids.device_label.text = f"خطا: {e}"
+                self.root.ids.device_info.text = f"خطا: {str(e)[:50]}"
         else:
-            self.root.ids.device_label.text = "بلوتوث پشتیبانی نمی‌شود"
+            # حالت دمو
+            self.root.ids.device_info.text = "حالت دمو (بدون بلوتوث)"
+            from kivymd.uix.list import OneLineListItem
+            self.root.ids.device_list.clear_widgets()
+            demo = [
+                {'name': 'Cooler-01', 'address': '00:11:22:33:44:55'},
+                {'name': 'Cooler-02', 'address': 'AA:BB:CC:DD:EE:FF'},
+            ]
+            for d in demo:
+                self.root.ids.device_list.add_widget(
+                    OneLineListItem(text=f"{d['name']}  |  {d['address']}")
+                )
         
-        self.root.ids.status_label.text = "قطع"
-        self.root.ids.status_label.text_color = (0.8, 0.2, 0.2, 1)
+        self.update_status("قطع", "disconnected")
     
-    def connect_device(self):
-        """اتصال به دستگاه"""
-        if self.connected:
-            # قطع اتصال
-            self.connected = False
-            self.root.ids.status_label.text = "قطع"
-            self.root.ids.status_label.text_color = (0.8, 0.2, 0.2, 1)
-            self.root.ids.device_label.text = "دستگاهی متصل نیست"
+    def toggle_connection(self):
+        """اتصال/قطع"""
+        if self.is_connected:
+            self.disconnect()
         else:
-            # اتصال
-            self.root.ids.status_label.text = "در حال اتصال..."
-            self.root.ids.status_label.text_color = (0.9, 0.7, 0.1, 1)
-            
-            if self.bt_manager:
-                try:
-                    success = self.bt_manager.connect()
-                    if success:
-                        self.connected = True
-                        self.root.ids.status_label.text = "متصل ✓"
-                        self.root.ids.status_label.text_color = (0.2, 0.8, 0.2, 1)
-                        self.root.ids.device_label.text = "دستگاه متصل است"
-                    else:
-                        self.root.ids.status_label.text = "قطع"
-                        self.root.ids.status_label.text_color = (0.8, 0.2, 0.2, 1)
-                        self.root.ids.device_label.text = "اتصال ناموفق"
-                except Exception as e:
-                    self.root.ids.device_label.text = f"خطا: {e}"
-            else:
-                # حالت دمو بدون بلوتوث
-                self.connected = True
-                self.root.ids.status_label.text = "متصل ✓ (دمو)"
-                self.root.ids.status_label.text_color = (0.2, 0.8, 0.2, 1)
-                self.root.ids.device_label.text = "حالت تست"
+            self.connect()
+    
+    def connect(self):
+        """اتصال"""
+        self.update_status("در حال اتصال...", "connecting")
+        
+        if self.bt:
+            try:
+                success = self.bt.connect()
+                if success:
+                    self.is_connected = True
+                    self.update_status("متصل", "connected")
+                    self.root.ids.device_info.text = "دستگاه متصل است"
+                    self.root.ids.connect_btn.text = "قطع اتصال"
+                else:
+                    self.update_status("قطع", "disconnected")
+                    self.root.ids.device_info.text = "اتصال ناموفق"
+            except Exception as e:
+                self.root.ids.device_info.text = f"خطا: {str(e)[:50]}"
+                self.update_status("قطع", "disconnected")
+        else:
+            # حالت دمو
+            self.is_connected = True
+            self.update_status("متصل (دمو)", "connected")
+            self.root.ids.device_info.text = "حالت تست"
+            self.root.ids.connect_btn.text = "قطع اتصال"
+    
+    def disconnect(self):
+        """قطع اتصال"""
+        if self.bt:
+            try:
+                self.bt.disconnect()
+            except:
+                pass
+        self.is_connected = False
+        self.update_status("قطع", "disconnected")
+        self.root.ids.device_info.text = "دستگاهی متصل نیست"
+        self.root.ids.connect_btn.text = "اتصال"
+    
+    def update_status(self, text, state):
+        """به‌روزرسانی وضعیت"""
+        if not hasattr(self.root.ids, 'status_label'):
+            return
+        self.root.ids.status_label.text = text
+        colors = {
+            "connected": (0.2, 0.7, 0.3, 1),
+            "disconnected": (0.8, 0.2, 0.2, 1),
+            "scanning": (0.9, 0.6, 0.1, 1),
+            "connecting": (0.9, 0.6, 0.1, 1),
+        }
+        self.root.ids.status_label.text_color = colors.get(state, (0.5, 0.5, 0.5, 1))
+    
+    # ═══════════════════════════════════════════════
+    # 🎛️ کنترل کولر
+    # ═══════════════════════════════════════════════
+    
+    def set_speed(self, speed):
+        """تنظیم سرعت"""
+        if not self.is_connected:
+            self.root.ids.device_info.text = "ابتدا متصل شوید"
+            return
+        commands = {
+            "low": "SPEED_LOW\n",
+            "medium": "SPEED_MED\n",
+            "high": "SPEED_HIGH\n",
+            "off": "SPEED_OFF\n",
+        }
+        command = commands.get(speed, "")
+        if command:
+            self.send_command(command)
+            self.root.ids.device_info.text = f"سرعت: {speed}"
+    
+    def power_off(self):
+        """خاموش کردن کامل"""
+        if not self.is_connected:
+            self.root.ids.device_info.text = "ابتدا متصل شوید"
+            return
+        self.send_command("POWER_OFF\n")
+        self.root.ids.device_info.text = "دستور خاموش ارسال شد"
+    
+    def send_command(self, command):
+        """ارسال دستور"""
+        if self.bt:
+            try:
+                self.bt.send(command)
+            except Exception as e:
+                self.root.ids.device_info.text = f"خطا: {str(e)[:50]}"
+        else:
+            print(f"[دمو] ارسال: {command}")
+    
+    def show_settings(self):
+        """تنظیمات"""
+        self.root.ids.device_info.text = "تنظیمات (به‌زودی)"
 
 
 if __name__ == '__main__':
