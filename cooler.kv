@@ -1,0 +1,154 @@
+#:import dp kivy.metrics.dp
+#:import MDSeparator kivymd.uix.divider.MDSeparator
+
+
+<CoolerCard@MDCard>:
+    orientation: 'vertical'
+    size_hint: None, None
+    size: dp(300), dp(140)
+    pos_hint: {"center_x": 0.5}
+    elevation: 3
+    radius: [15,]
+    padding: dp(15)
+    spacing: dp(10)
+
+
+MDScreen:
+    md_bg_color: 0.95, 0.95, 0.95, 1
+    
+    MDBoxLayout:
+        orientation: 'vertical'
+        
+        # ═══ نوار بالا ═══
+        MDTopAppBar:
+            title: "Cooler Control"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.scan_devices()]]
+            right_action_items: [["cog", lambda x: app.show_settings()]]
+            md_bg_color: app.theme_cls.primary_color
+        
+        # ═══ محتوای اصلی ═══
+        ScrollView:
+            MDBoxLayout:
+                orientation: 'vertical'
+                padding: dp(15)
+                spacing: dp(15)
+                size_hint_y: None
+                height: self.minimum_height
+                
+                # ─── کارت وضعیت ───
+                CoolerCard:
+                    MDLabel:
+                        text: "وضعیت اتصال"
+                        halign: "center"
+                        font_style: "H6"
+                        theme_text_color: "Primary"
+                        size_hint_y: None
+                        height: dp(30)
+                    
+                    MDLabel:
+                        id: status_label
+                        text: "قطع"
+                        halign: "center"
+                        font_style: "H4"
+                        bold: True
+                        theme_text_color: "Custom"
+                        text_color: 0.8, 0.2, 0.2, 1
+                        size_hint_y: None
+                        height: dp(50)
+                    
+                    MDLabel:
+                        id: device_info
+                        text: "دستگاهی متصل نیست"
+                        halign: "center"
+                        font_style: "Caption"
+                        theme_text_color: "Secondary"
+                        size_hint_y: None
+                        height: dp(25)
+                
+                # ─── دکمه اسکن ───
+                MDRaisedButton:
+                    text: "اسکن دستگاه‌ها"
+                    pos_hint: {"center_x": 0.5}
+                    size_hint_x: 0.85
+                    on_release: app.scan_devices()
+                
+                # ─── دکمه اتصال ───
+                MDRaisedButton:
+                    id: connect_btn
+                    text: "اتصال"
+                    pos_hint: {"center_x": 0.5}
+                    size_hint_x: 0.85
+                    md_bg_color: 0.2, 0.7, 0.3, 1
+                    on_release: app.toggle_connection()
+                
+                # ─── کارت تنظیمات سرعت ───
+                CoolerCard:
+                    size: dp(300), dp(220)
+                    
+                    MDLabel:
+                        text: "تنظیم سرعت"
+                        halign: "center"
+                        font_style: "H6"
+                        theme_text_color: "Primary"
+                        size_hint_y: None
+                        height: dp(30)
+                    
+                    MDSeparator:
+                    
+                    MDBoxLayout:
+                        orientation: 'horizontal'
+                        spacing: dp(8)
+                        size_hint_y: None
+                        height: dp(50)
+                        
+                        MDFlatButton:
+                            text: "کم"
+                            on_release: app.set_speed("low")
+                        
+                        MDFlatButton:
+                            text: "متوسط"
+                            on_release: app.set_speed("medium")
+                        
+                        MDFlatButton:
+                            text: "زیاد"
+                            on_release: app.set_speed("high")
+                    
+                    MDBoxLayout:
+                        orientation: 'horizontal'
+                        spacing: dp(8)
+                        size_hint_y: None
+                        height: dp(50)
+                        
+                        MDRaisedButton:
+                            text: "خاموش"
+                            size_hint_x: 0.5
+                            on_release: app.set_speed("off")
+                        
+                        MDRaisedButton:
+                            text: "قطع کامل"
+                            size_hint_x: 0.5
+                            md_bg_color: 0.8, 0.2, 0.2, 1
+                            on_release: app.power_off()
+                
+                # ─── کارت دستگاه‌های یافت‌شده ───
+                CoolerCard:
+                    size: dp(300), dp(180)
+                    
+                    MDLabel:
+                        text: "دستگاه‌های یافت‌شده"
+                        font_style: "Subtitle1"
+                        theme_text_color: "Primary"
+                        size_hint_y: None
+                        height: dp(30)
+                    
+                    MDSeparator:
+                    
+                    ScrollView:
+                        MDList:
+                            id: device_list
+                
+                # ─── فضای خالی ───
+                Widget:
+                    size_hint_y: None
+                    height: dp(30)
