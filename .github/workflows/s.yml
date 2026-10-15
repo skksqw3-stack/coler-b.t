@@ -1,0 +1,166 @@
+name: Build Cooler Control APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cooler-control-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    env:
+      P4A_RELEASE: 0
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check project files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pwd
+          git status --short
+          test -f buildozer.spec
+          test -f main.py
+          test -f cooler.kv
+          test -f bluetooth_manager.py
+          test -f .github/workflows/build.yml
+          find . -maxdepth 3 -type f -not -path './.git/*' | sort
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip \
+            build-essential \
+            autoconf automake libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev libncursesw5-dev libtinfo5 \
+            cmake libffi-dev libssl-dev \
+            ccache
+
+      - name: Install pinned Python build tools
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            buildozer==1.5.0 \
+            cython==0.29.36 \
+            setuptools==75.8.0
+          python --version
+          java -version
+          buildozer --version
+          cython --version
+
+      - name: Cache Buildozer downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ~/.gradle
+          key: android-build-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            android-build-${{ runner.os }}-
+
+      - name: Validate application Python syntax
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m py_compile main.py bluetooth_manager.py
+
+      - name: Build debug APK and save logs
+        id: android_build
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee build.log
+          echo "Buildozer exit code: ${PIPESTATUS[0]}"
+
+      - name: Collect build diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          if [ -f build.log ]; then
+            cp build.log diagnostics/build.log
+          fi
+          {
+            echo "=== Date ==="
+            date -u
+            echo "=== Python ==="
+            python --version || true
+            echo "=== Java ==="
+            java -version 2>&1 || true
+            echo "=== Buildozer ==="
+            buildozer --version || true
+            echo "=== Project files ==="
+            find . -maxdepth 3 -type f \
+              -not -path './.git/*' \
+              -not -path './.buildozer/*' | sort
+            echo "=== APK files ==="
+            find bin -maxdepth 1 -type f -name '*.apk' -print 2>/dev/null || true
+          } > diagnostics/environment.txt 2>&1
+
+          if [ -d .buildozer ]; then
+            find .buildozer -type f \
+              \( -name '*.log' -o -name 'debug.txt' \) \
+              -size -20M -print0 2>/dev/null |
+            while IFS= read -r -d '' f; do
+              dest="diagnostics/${f#./}"
+              mkdir -p "$(dirname "$dest")"
+              cp "$f" "$dest" || true
+            done
+          fi
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoolerControl-APK
+          path: bin/*.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoolerControl-Build-Diagnostics
+          path: diagnostics/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail if APK build failed
+        if: steps.android_build.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "APK build failed. Download CoolerControl-Build-Diagnostics."
+          exit 1
